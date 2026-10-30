@@ -415,7 +415,7 @@ make("TextLabel", {
     Position = UDim2.fromOffset(11, 8),
     Size = UDim2.new(1, -22, 0, 20),
     BackgroundTransparency = 1,
-    Text = "JOIN THE REDLINER DISCORD",
+    Text = "JOIN SOULLESS SCRIPTS FOR SUGGESTIONS",
     TextColor3 = white,
     TextSize = 10,
     Font = Enum.Font.GothamBlack,
