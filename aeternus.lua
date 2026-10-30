@@ -160,15 +160,95 @@ local statusLabel = make("TextLabel", {
     TextXAlignment = Enum.TextXAlignment.Left,
 }, main)
 
-local content = make("Frame", {
+-- Tab navigation and scrollable pages (UI-only; gameplay/tracking logic is unchanged)
+local tabBar = make("Frame", {
+    Name = "TabBar",
     Position = UDim2.fromOffset(14, 119),
-    Size = UDim2.new(1, -28, 1, -132),
+    Size = UDim2.new(1, -28, 0, 34),
     BackgroundTransparency = 1,
 }, main)
 make("UIListLayout", {
-    Padding = UDim.new(0, 7),
+    FillDirection = Enum.FillDirection.Horizontal,
+    Padding = UDim.new(0, 5),
     SortOrder = Enum.SortOrder.LayoutOrder,
-}, content)
+}, tabBar)
+
+local pageHolder = make("Frame", {
+    Name = "PageHolder",
+    Position = UDim2.fromOffset(14, 160),
+    Size = UDim2.new(1, -28, 1, -173),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+}, main)
+
+local pages = {}
+local fovStroke -- assigned when the FOV ring is created below
+local currentPageName = "VISUALS"
+local content
+
+local function createPage(name)
+    local page = make("ScrollingFrame", {
+        Name = name .. "Page",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 5,
+        ScrollBarImageColor3 = accent(),
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Visible = false,
+    }, pageHolder)
+    local layout = make("UIListLayout", {
+        Padding = UDim.new(0, 7),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, page)
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        page.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
+    end)
+    pages[name] = page
+    return page
+end
+
+local function selectTab(name)
+    currentPageName = name
+    content = pages[name]
+    for pageName, page in pairs(pages) do
+        page.Visible = pageName == name
+    end
+    for _, child in ipairs(tabBar:GetChildren()) do
+        if child:IsA("TextButton") then
+            local selected = child.Name == name .. "Tab"
+            child.BackgroundColor3 = selected and accent() or panel
+            child.TextColor3 = selected and bg or muted
+        end
+    end
+end
+
+local function addTab(name)
+    local button = make("TextButton", {
+        Name = name .. "Tab",
+        Size = UDim2.new(0.25, -4, 1, 0),
+        BackgroundColor3 = panel,
+        Text = name,
+        TextColor3 = muted,
+        TextSize = 9,
+        Font = Enum.Font.GothamBlack,
+        AutoButtonColor = true,
+        LayoutOrder = #tabBar:GetChildren() + 1,
+    }, tabBar)
+    corner(button, 8)
+    button.Activated:Connect(function() selectTab(name) end)
+end
+
+createPage("VISUALS")
+createPage("TARGETING")
+createPage("SETTINGS")
+createPage("DISCORD")
+addTab("VISUALS")
+addTab("TARGETING")
+addTab("SETTINGS")
+addTab("DISCORD")
 
 local function section(labelText)
     local label = make("TextLabel", {
@@ -179,6 +259,7 @@ local function section(labelText)
         TextSize = 10,
         Font = Enum.Font.GothamBlack,
         TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = #content:GetChildren() + 1,
     }, content)
     return label
 end
@@ -275,10 +356,15 @@ local function addControl(labelText, valueText, callback)
     return row
 end
 
-section("VISUALS")
+-- VISUALS tab
+content = pages.VISUALS
+section("PLAYER VISUALS")
 addToggle("Player highlights", "ESP", "Highlight user models")
 addToggle("Player tags", "Names", "Show label above each user")
 addToggle("FOV ring", "ShowFOV", "Display screen-space selection radius")
+
+-- TARGETING tab: existing controls and settings are retained as-is.
+content = pages.TARGETING
 section("TARGETING")
 addToggle("Target selector", "TargetSelector", "Pick closest visible target in ring")
 addToggle("Aim assist (Players)", "SmoothTrack", "Smooth camera tracking for players")
@@ -293,23 +379,92 @@ addControl("Tracking smoothness", tostring(math.floor(settings.Smoothness * 100)
     if settings.Smoothness > 0.56 then settings.Smoothness = 0.08 end
     return tostring(math.floor(settings.Smoothness * 100)) .. "%"
 end)
+
+-- SETTINGS tab
+content = pages.SETTINGS
+section("APPEARANCE")
 addControl("Accent color", palette[settings.ColorIndex].name, function()
     settings.ColorIndex = settings.ColorIndex % #palette + 1
     local c = accent()
     accentBar.BackgroundColor3 = c
     fovStroke.Color = c
+    for _, page in pairs(pages) do page.ScrollBarImageColor3 = c end
     return palette[settings.ColorIndex].name
 end)
-
 local footer = make("TextLabel", {
     Size = UDim2.new(1, 0, 0, 24),
     BackgroundTransparency = 1,
-    Text = "AIM ASSIST  •  PLAYERS EDITION",
+    Text = "REDLINER  •  PLAYER EDITION",
     TextColor3 = muted,
     TextSize = 9,
     Font = Enum.Font.GothamBold,
     LayoutOrder = 999,
 }, content)
+
+-- DISCORD tab: the invite remains visible and can be selected/copied manually.
+content = pages.DISCORD
+section("COMMUNITY")
+local discordCard = make("Frame", {
+    Size = UDim2.new(1, 0, 0, 116),
+    BackgroundColor3 = panel,
+    BorderSizePixel = 0,
+    LayoutOrder = 1,
+}, content)
+corner(discordCard, 10)
+make("TextLabel", {
+    Position = UDim2.fromOffset(11, 8),
+    Size = UDim2.new(1, -22, 0, 20),
+    BackgroundTransparency = 1,
+    Text = "JOIN THE REDLINER DISCORD",
+    TextColor3 = white,
+    TextSize = 10,
+    Font = Enum.Font.GothamBlack,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, discordCard)
+local discordInvite = make("TextBox", {
+    Name = "DiscordInvite",
+    Position = UDim2.fromOffset(10, 35),
+    Size = UDim2.new(1, -20, 0, 30),
+    BackgroundColor3 = panel2,
+    Text = "https://discord.gg/qqTkZEbfE",
+    TextColor3 = accent(),
+    PlaceholderColor3 = muted,
+    TextSize = 10,
+    Font = Enum.Font.Gotham,
+    ClearTextOnFocus = false,
+    TextEditable = false,
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, discordCard)
+corner(discordInvite, 7)
+local copyInviteButton = make("TextButton", {
+    Position = UDim2.fromOffset(10, 74),
+    Size = UDim2.new(1, -20, 0, 29),
+    BackgroundColor3 = accent(),
+    Text = "COPY INVITE LINK",
+    TextColor3 = bg,
+    TextSize = 10,
+    Font = Enum.Font.GothamBlack,
+    AutoButtonColor = true,
+}, discordCard)
+corner(copyInviteButton, 7)
+copyInviteButton.Activated:Connect(function()
+    local invite = "https://discord.gg/qqTkZEbfE"
+    local copied = false
+    if typeof(setclipboard) == "function" then
+        copied = pcall(setclipboard, invite)
+    elseif typeof(toclipboard) == "function" then
+        copied = pcall(toclipboard, invite)
+    end
+    if copied then
+        copyInviteButton.Text = "COPIED!"
+    else
+        discordInvite:CaptureFocus()
+        discordInvite.CursorPosition = #discordInvite.Text + 1
+        copyInviteButton.Text = "SELECT LINK, THEN COPY"
+    end
+end)
+
+selectTab("VISUALS")
 
 -- Dragging logic
 local dragging, dragInput, dragStart, startPosition
@@ -372,7 +527,7 @@ local fovCircle = make("Frame", {
     Visible = settings.ShowFOV,
 }, gui)
 corner(fovCircle, 1000)
-local fovStroke = stroke(fovCircle, accent(), 2, 0.08)
+fovStroke = stroke(fovCircle, accent(), 2, 0.08)
 
 local targetReadout = make("TextLabel", {
     AnchorPoint = Vector2.new(0.5, 0),
